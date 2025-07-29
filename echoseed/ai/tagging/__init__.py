@@ -1,0 +1,1 @@
+from .mood_tagger import main
