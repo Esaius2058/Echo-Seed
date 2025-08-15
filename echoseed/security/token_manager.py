@@ -2,7 +2,7 @@ import json
 from dotenv import load_dotenv
 import logging
 import os
-from cryptography.fernet import Fernet
+from cryptography.fernet import Fernet, MultiFernet
 from pathlib import Path
 
 class TokenManager:
@@ -46,6 +46,35 @@ class TokenManager:
         if os.path.exists(self.token_file_path):
             os.remove(self.token_file_path)
         self.token_data = None
+
+    def rotate_key(self, new_key: str):
+        base_dir = Path(__file__).resolve().parents[2]
+        if not new_key:
+            new_key = Fernet.generate_key()
+
+        old_key = self.fernet
+        multi_fernet = MultiFernet([new_key, old_key])
+
+    def _update_env_file(self, new_key:str, new_value:str):
+        lines = []
+        found = False
+        base_dir = Path(__file__).resolve().parents[2]
+        env_path = base_dir / ".env"
+        if os.path.exists(env_path):
+            with open(env_path, "w") as f:
+                lines = f.readlines()
+                for i, line in enumerate(lines):
+                    if line.startswith(f"{new_key}="):
+                        lines[i] = f"{new_key}={new_value}"
+                        found = True
+                        break
+
+        if not found:
+            lines.append(f"{key}={value}")
+
+        with open(env_path, "w") as f:
+            f.writelines(lines)
+
 
 if __name__ == "__main__":
     load_dotenv()
