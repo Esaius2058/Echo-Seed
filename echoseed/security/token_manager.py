@@ -47,13 +47,21 @@ class TokenManager:
             os.remove(self.token_file_path)
         self.token_data = None
 
-    def rotate_key(self, new_key: str):
-        base_dir = Path(__file__).resolve().parents[2]
+    def rotate_key(self, new_key:bytes = None, encrypted_token: bytes = None) -> bytes:
         if not new_key:
             new_key = Fernet.generate_key()
 
-        old_key = self.fernet
-        multi_fernet = MultiFernet([new_key, old_key])
+        old_fernet = self.fernet
+        multi_fernet = MultiFernet([Fernet(new_key), old_fernet])
+
+        rotated = None
+        if encrypted_token:
+            rotated = multi_fernet.rotate(encrypted_token)
+
+        self.fernet = Fernet(new_key)
+        self._update_env_file("SECRET_KEY", new_key.decode())
+
+        return rotated
 
     def _update_env_file(self, new_key:str, new_value:str):
         lines = []
@@ -70,11 +78,10 @@ class TokenManager:
                         break
 
         if not found:
-            lines.append(f"{key}={value}")
+            lines.append(f"{new_key}={new_value}")
 
         with open(env_path, "w") as f:
             f.writelines(lines)
-
 
 if __name__ == "__main__":
     load_dotenv()
