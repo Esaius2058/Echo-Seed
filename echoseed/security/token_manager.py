@@ -1,6 +1,7 @@
 import json
-from dotenv import load_dotenv
 import logging
+import requests
+from dotenv import load_dotenv
 import os
 from cryptography.fernet import Fernet, MultiFernet
 from pathlib import Path
@@ -9,6 +10,7 @@ class TokenManager:
     def __init__(self, encryption_key: bytes):
         base_dir = Path(__file__).resolve().parents[2]
         self.token_file_path = base_dir / "tokens.json.enc"
+        self.logger = logging.getLogger(__name__)
         self.fernet = Fernet(encryption_key)
         self.token_data = None
         self.load_token()
@@ -69,19 +71,47 @@ class TokenManager:
         base_dir = Path(__file__).resolve().parents[2]
         env_path = base_dir / ".env"
         if os.path.exists(env_path):
-            with open(env_path, "w") as f:
+            with open(env_path, "r", encoding="utf-8") as f:
                 lines = f.readlines()
-                for i, line in enumerate(lines):
-                    if line.startswith(f"{new_key}="):
-                        lines[i] = f"{new_key}={new_value}"
-                        found = True
-                        break
+
+            for i, line in enumerate(lines):
+                if line.startswith(f"{new_key}="):
+                    lines[i] = f"{new_key}={new_value}"
+                    found = True
+                    break
 
         if not found:
             lines.append(f"{new_key}={new_value}")
 
-        with open(env_path, "w") as f:
+        with open(env_path, "w", encoding="utf-8") as f:
+            self.logger.info(f"Writing Lines to ENV file...")
             f.writelines(lines)
+
+    def refresh_token(self):
+        token_data = self.get_token()
+        if not token_data or "refresh_token" not in token_data:
+            print("[TokenManager] No refresh_token available.")
+            return None
+
+        refresh_token = token_data["refresh_token"]
+
+        try:
+            response = requests.post(
+                "https://example.com/oauth/refresh",
+                json={"refresh_token": refresh_token},
+                timeout=10
+            )
+            if response.status_code == 200:
+                new_token_data = response.json()
+                self.update_token(new_token_data)
+                print("[TokenManager] Token refreshed successfully.")
+                return new_token_data
+            else:
+                print(f"[TokenManager] Refresh failed: {response.status_code}")
+                return None
+        except Exception as e:
+            print(f"[TokenManager] Error refreshing token: {e}")
+            return None
 
 if __name__ == "__main__":
     load_dotenv()
