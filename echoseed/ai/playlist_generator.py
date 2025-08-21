@@ -1,9 +1,10 @@
+import json
 import os
 import random
 from pathlib import Path
 from dotenv import load_dotenv
 from spotipy import Spotify
-from openai import OpenAI, base_url
+from openai import OpenAI
 
 load_dotenv()
 
@@ -14,7 +15,7 @@ mood_labels_file = base_dir / "cluster_mood_map.json"
 class PlaylistGenerator:
     def __init__(self, spotify_client: Spotify, mood):
         self.spotify = spotify_client
-        self.user = self.spotify.user(self.spotify.me())
+        self.user = self.spotify.me()
         self.mood = mood
         self.ai_client = OpenAI(
             api_key=os.getenv("GEMINI_API_KEY"),
@@ -24,7 +25,7 @@ class PlaylistGenerator:
             self.clustered_tracks = f.read()
 
         with open(mood_labels_file, "r") as f:
-            self.mood_labels = f.read()
+            self.mood_labels = json.load(f)
 
     def get_clusters_for_mood(self) -> list:
         matching_clusters = []
@@ -60,9 +61,9 @@ class PlaylistGenerator:
         # Pick one at random
         return random.choice(names) if names else "Untitled Mix"
 
-    def get_artists_from_playlists(self, user_id):
+    def get_artists_from_playlists(self):
         artists = set()
-        playlists = self.spotify.user_playlists(user_id, limit=10)
+        playlists = self.spotify.user_playlists(self.user["id"], limit=10)
 
         for playlist in playlists["items"]:
             playlist_id = playlist.id
@@ -81,10 +82,10 @@ class PlaylistGenerator:
                 else:
                     tracks = None
 
-            return list(artists)
+        return list(artists)
 
-    def get_recommended_tracks(self, user_id, limit: int = 25):
-        artists = self.get_artists_from_playlists(user_id)
+    def get_recommended_tracks(self, limit: int = 25):
+        artists = self.get_artists_from_playlists()
         prompt = (
             f"I have a list of artists: {', '.join(artists)}.\n"
             f"The desired mood is '{self.mood}'.\n"
@@ -111,16 +112,12 @@ class PlaylistGenerator:
 
         return recommendations[:limit]
 
-    def generate_playlist(self, user_id, limit: int = 25):
+    def generate_playlist(self, limit: int = 25):
         playlist_name = self.get_playlist_name()
-        playlist = self.spotify.user_playlist_create(
-            self.user,
-            playlist_name,
-            False,
-        )
+        playlist = self.spotify.user_playlist_create(self.user, playlist_name)
 
         track_uris = []
-        recommended_tracks = self.get_recommended_tracks(user_id)
+        recommended_tracks = self.get_recommended_tracks()
         for recommended_track in recommended_tracks:
             parts = recommended_track.split(" - ")
             if len(parts) == 2:
