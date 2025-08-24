@@ -6,12 +6,10 @@ from pathlib import Path
 from dotenv import load_dotenv
 from google import genai
 
-client = genai.Client()
-
 load_dotenv()
 
 class MoodTagger:
-    def __init__(self, client):
+    def __init__(self, client = genai.Client()):
         self.client = client
 
     def get_clusters(self) -> dict:
@@ -34,7 +32,7 @@ class MoodTagger:
         return prompt
 
     def get_gpt_label(self, prompt, model="gemini-2.5-flash") -> str:
-        response = client.models.generate_content(model=model, contents=prompt)
+        response = self.client.models.generate_content(model=model, contents=prompt)
         first_candidate = response["candidates"][0]
         text_response = first_candidate["content"]["parts"][0]["text"]
 
@@ -103,5 +101,5 @@ class MoodTagger:
             json.dump(result, f, indent=2)
 
 if __name__ == "__main__":
-    tagger = MoodTagger(client)
+    tagger = MoodTagger()
     tagger.main()
