@@ -4,6 +4,7 @@ import threading
 import time
 import webbrowser
 from dotenv import load_dotenv
+from pathlib import Path
 from flask import Flask, request
 from spotipy import SpotifyOAuth, Spotify
 
@@ -27,7 +28,7 @@ class SpotifyAuthService:
             scope=SCOPE,
             open_browser=False,
             show_dialog=True,
-            cache_path=".cache"  # Optional: Save tokens
+            cache_path=Path.home() / ".spotify_cache"
         )
         self.spotify = None
         self.auth_code = None
