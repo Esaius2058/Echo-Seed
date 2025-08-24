@@ -9,7 +9,7 @@ from openai import OpenAI
 load_dotenv()
 
 base_dir = Path(__file__).resolve().parents[2]
-clustered_tracks_file = base_dir / "echo-seed" / "data" / "processed" / "clustered_tracks.csv"
+clustered_tracks_file = base_dir / "echoseed" / "data" / "processed" / "clustered_tracks.csv"
 mood_labels_file = base_dir / "cluster_mood_map.json"
 
 class PlaylistGenerator:
@@ -29,7 +29,8 @@ class PlaylistGenerator:
 
     def get_clusters_for_mood(self) -> list:
         matching_clusters = []
-        for cluster_id, label in self.mood_labels:
+        for cluster_id, label in self.mood_labels.items():
+            print(f"{cluster_id}: {label}")
             if label == self.mood:
                 matching_clusters.append(cluster_id)
 
@@ -66,13 +67,13 @@ class PlaylistGenerator:
         playlists = self.spotify.user_playlists(self.user["id"], limit=10)
 
         for playlist in playlists["items"]:
-            playlist_id = playlist.id
+            playlist_id = playlist["id"]
 
             tracks = self.spotify.playlist_items(playlist_id)
 
             while tracks:
                 for item in tracks["items"]:
-                    track = item.get("track")
+                    track = item["track"]
                     if track:
                         for artist in track["artists"]:
                             artists.add(artist["name"])
@@ -139,3 +140,12 @@ class PlaylistGenerator:
 
         if track_uris:
             self.spotify.playlist_add_items(playlist["id"], track_uris)
+
+if __name__ == "__main__":
+    from echoseed.api.auth import SpotifyAuthService
+    auth = SpotifyAuthService()
+    auth.authenticate()
+    sp_client = auth.get_spotify_client()
+    generator = PlaylistGenerator(sp_client, "hype")
+    mood_clusters = generator.get_clusters_for_mood()
+    print(mood_clusters)
