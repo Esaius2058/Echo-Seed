@@ -1,19 +1,27 @@
+import os
 import json
 import logging
-import requests
-from dotenv import load_dotenv
-import os
-from cryptography.fernet import Fernet, MultiFernet
 from pathlib import Path
+from dotenv import load_dotenv
+from cryptography.fernet import Fernet, MultiFernet
 
 class TokenManager:
     def __init__(self, encryption_key: bytes):
         base_dir = Path(__file__).resolve().parents[2]
         self.token_file_path = base_dir / "tokens.json.enc"
-        self.logger = logging.getLogger(__name__)
+        self.logger = logging.getLogger("echoseed.token_manager")
         self.fernet = Fernet(encryption_key)
         self.token_data = None
         self.load_token()
+
+    def save_token(self, token_data):
+        try:
+            json_data = json.dumps(token_data).encode()
+            encrypted_data = self.fernet.encrypt(json_data)
+            with open(self.token_file_path, 'wb') as f:
+                f.write(encrypted_data)
+        except Exception as e:
+            print(f"[TokenManager] Failed to save token: {e}")
 
     def load_token(self):
         """Loads and decrypts token from file if it exists."""
@@ -27,17 +35,10 @@ class TokenManager:
                 print(f"[TokenManager] Failed to decrypt token: {e}")
                 self.token_data = None
 
-    def save_token(self, token_data):
-        try:
-            json_data = json.dumps(token_data).encode()
-            encrypted_data = self.fernet.encrypt(json_data)
-            with open(self.token_file_path, 'wb') as f:
-                f.write(encrypted_data)
-        except Exception as e:
-            print(f"[TokenManager] Failed to save token: {e}")
-
     def get_token(self):
-        self.load_token()
+        if not self.token_data:
+            self.load_token()
+
         return self.token_data
 
     def update_token(self, new_token_data: dict):
@@ -84,34 +85,9 @@ class TokenManager:
             lines.append(f"{new_key}={new_value}")
 
         with open(env_path, "w", encoding="utf-8") as f:
-            self.logger.info(f"Writing Lines to ENV file...")
+            self.logger.info(f"[TokenManager]Writing Lines to ENV file...")
             f.writelines(lines)
 
-    def refresh_token(self):
-        token_data = self.get_token()
-        if not token_data or "refresh_token" not in token_data:
-            print("[TokenManager] No refresh_token available.")
-            return None
-
-        refresh_token = token_data["refresh_token"]
-
-        try:
-            response = requests.post(
-                "https://example.com/oauth/refresh",
-                json={"refresh_token": refresh_token},
-                timeout=10
-            )
-            if response.status_code == 200:
-                new_token_data = response.json()
-                self.update_token(new_token_data)
-                print("[TokenManager] Token refreshed successfully.")
-                return new_token_data
-            else:
-                print(f"[TokenManager] Refresh failed: {response.status_code}")
-                return None
-        except Exception as e:
-            print(f"[TokenManager] Error refreshing token: {e}")
-            return None
 
 if __name__ == "__main__":
     load_dotenv()
