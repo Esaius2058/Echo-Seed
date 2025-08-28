@@ -1,38 +1,40 @@
+import os
 import logging
+from dotenv import load_dotenv
 from echoseed.api.auth import SpotifyAuthService
-from echoseed.api.playlist_service import SpotifyPlaylistService
+from echoseed.security.token_manager import TokenManager
+from echoseed.security.network_monitor import NetworkMonitor
+from echoseed.ai.playlist_generator import PlaylistGenerator
+from echoseed.ui.cli import PlaylistCLI
 
+load_dotenv()
 logger = logging.getLogger("echoseed.main")
-logging.basicConfig(level=logging.INFO)
+secret_key = os.getenv("SECRET_KEY").encode()
 
-def get_track_ids(tracks):
-    return [track.id for track in tracks]
-
-def start_playlist_generator_with_authentication():
+def main():
     try:
         auth_service = SpotifyAuthService()
         auth_service.authenticate()
+        spotify_client = auth_service.get_spotify_client()
+        access_token = auth_service.get_access_token()
+        token_manager = TokenManager(secret_key)
+        logger.info("[EchoSeed] Saving Access Token")
+        token_manager.save_token(access_token)
 
-        spotify = auth_service.get_spotify_client()
-        playlist_service = SpotifyPlaylistService(spotify)
+        network_monitor = NetworkMonitor(refresh_callback=auth_service.refresh_access_token)
+        network_monitor.run()
 
-        playlists = playlist_service.get_user_playlists()
-        logger.info("Retrieved %d playlists", len(playlists))
+        cli = PlaylistCLI(spotify_client)
+        logger.info("[EchoSeed] UI")
+        selected_mood = cli.display_menu()
 
-        if playlists:
-            selected = playlists[0]
-            tracks = playlist_service.get_playlist_tracks(selected.id)
-            logger.info("Retrieved %d tracks from playlist '%s'", len(tracks), selected.name)
-
-            track_ids = get_track_ids(tracks)
-
-            # Placeholder for next step (e.g. clustering, analysis)
-            logger.info("Fetched %d track IDs for analysis", len(track_ids))
-
+        generator = PlaylistGenerator(spotify_client, selected_mood)
+        logger.info("[EchoSeed] PlaylistGenerator generating playlist")
+        playlist = generator.generate_playlist()
     except Exception as e:
         logger.error("Application failed: %s", str(e))
+        logger.error(f"Error generating playlist {e}")
         exit(1)
 
 if __name__ == "__main__":
-    logger.info("Starting EchoSeed...")
-    start_playlist_generator_with_authentication()
+    main()
